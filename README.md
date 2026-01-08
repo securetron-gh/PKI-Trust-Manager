@@ -107,11 +107,11 @@ PKI Trust Manager follows a modern microservices architecture:
 
 #### 1. **Azure Deployment** (Recommended for Cloud)
 For deploying on Microsoft Azure with Azure Container Instances and Azure SQL Database:
-👉 [Azure Deployment Guide](./DEPLOY-AZURE.md)
+👉 [Azure Deployment Guide](./README-Azure-Deployment.md)
 
 #### 2. **Docker Deployment** (On-Premises or Any Cloud)
 For deploying using Docker and Docker Compose:
-👉 [Docker Deployment Guide](./DEPLOY-DOCKER.md)
+👉 [Docker Deployment Guide](./README-Docker-Deployment.md)
 
 ### Quick Decision Guide:
 
