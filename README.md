@@ -245,8 +245,8 @@ We welcome feedback and contributions:
 
 **Ready to deploy? Choose your deployment method:**
 
-👉 [Deploy on Azure](./DEPLOY-AZURE.md)  
-👉 [Deploy with Docker](./DEPLOY-DOCKER.md)
+👉 [Deploy on Azure](./README-Azure-Deployment.mdd)  
+👉 [Deploy with Docker](./README-Docker-Deployment.md)
 
 ---
 
