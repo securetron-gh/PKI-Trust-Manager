@@ -105,7 +105,7 @@ PKI Trust Manager follows a modern microservices architecture:
 
 ### Choose Your Deployment Method:
 
-#### 1. **Azure Deployment** (Recommended for Cloud)
+#### 1. **Azure Deployment**
 For deploying on Microsoft Azure with Azure Container Instances and Azure SQL Database:
 👉 [Azure Deployment Guide](./README-Azure-Deployment.md)
 
@@ -211,16 +211,6 @@ PKI Trust Manager is requires a valid license. Contact sales@securetron.net or s
 ### License Features Based on Tier:
 https://securetron.net/pricing/
 
-## 🌟 Success Stories
-
-### Case Study 1: Financial Institution
-*"PKI Trust Manager helped us reduce certificate-related outages by 95% and cut management time by 70%."*
-
-### Case Study 2: Healthcare Provider
-*"With automated certificate renewals, we eliminated manual errors and improved our HIPAA compliance posture."*
-
-### Case Study 3: Manufacturing Company
-*"The IoT device certificate management allowed us to securely scale our connected devices."*
 
 ## 🤝 Contributing & Feedback
 
