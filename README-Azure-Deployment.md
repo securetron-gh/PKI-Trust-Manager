@@ -248,10 +248,10 @@ az container delete \
 ### Contact Securetron
 - **Email**: support@securetron.net
 - **Documentation**: https://securetron.net/documentation
-- **Community**: https://community.securetron.net
+- **Community**: https://reddit.com/r/pki
 
 ---
 
 **Time to deploy**: ~5 minutes  
-**Cost estimate**: ~$50-100/month (Container + SQL)  
+**Cost estimate**: ~$20-100/month (Container + SQL)  
 **Maintenance**: Automatic with Azure Container Instances
