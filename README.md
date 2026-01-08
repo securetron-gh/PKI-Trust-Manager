@@ -177,11 +177,6 @@ Before deploying, ensure you have:
 - [API Reference](https://securetron.net/documentation)
 - [Administrator Guide](https://securetron.net/documentation)
 
-### Training & Certification
-- [Online Training](https://academy.securetron.com/pki-trust-manager)
-- [Certification Program](https://securetron.com/certification)
-- [Webinars & Workshops](https://securetron.com/events)
-
 ### Community & Support
 - [Community Forum](https://reddit.com/r/pki)
 - [Knowledge Base](https://securetron.net/documentation)
@@ -190,17 +185,8 @@ Before deploying, ensure you have:
 ## 🆘 Support & Maintenance
 
 ### Support Channels
-- **Email Support**: support@securetron.com
-- **Phone Support**: +1-XXX-XXX-XXXX
-- **Portal**: https://support.securetron.com
-
-### Service Level Agreements (SLAs)
-- **Business Hours**: 9 AM - 6 PM EST, Monday-Friday
-- **Emergency Support**: 24/7 for critical issues
-- **Response Times**: 
-  - Critical: < 1 hour
-  - High: < 4 hours
-  - Normal: < 8 business hours
+- **Email Support**: support@securetron.net
+- **Portal**: https://securetron.net
 
 ### Maintenance Windows
 - **Security Updates**: 2nd Tuesday monthly
@@ -246,10 +232,9 @@ We welcome feedback and contributions:
 ## 📞 Contact Information
 
 ### Securetron Inc.
-- **Website**: https://securetron.com
-- **Sales**: sales@securetron.com
-- **Support**: support@securetron.com
-- **Address**: 123 Security Blvd, San Francisco, CA 94107
+- **Website**: https://securetron.net
+- **Sales**: sales@securetron.net
+- **Support**: support@securetron.net
 
 ### Social Media
 - [LinkedIn](https://linkedin.com/company/securetron)
@@ -267,4 +252,4 @@ We welcome feedback and contributions:
 
 *Last Updated: $(date +%Y-%m-%d)*  
 *Document Version: 2.1*  
-*PKI Trust Manager Version: 2.1.0*
+*PKI Trust Manager Version: 2.1.0+*
