@@ -246,9 +246,9 @@ az container delete \
 3. **Check container status**: `az container show -g pki-trust-manager-rg -n pki-trust-manager`
 
 ### Contact Securetron
-- **Email**: support@securetron.com
-- **Documentation**: https://docs.securetron.com/pki-trust-manager
-- **Community**: https://community.securetron.com
+- **Email**: support@securetron.net
+- **Documentation**: https://securetron.net/documentation
+- **Community**: https://community.securetron.net
 
 ---
 
