@@ -84,22 +84,6 @@ After saving, PKI Trust Manager will automatically:
 3. Validate API responses
 4. Display connection status
 
-#### Manual Test Commands:
-```powershell
-# Test from PKI Trust Manager server
-# 1. Test basic connectivity
-Test-NetConnection -ComputerName "ca-server" -Port 9081
-
-# 2. Test API endpoint
-Invoke-WebRequest -Uri "http://ca-server:9081/" -UseBasicParsing
-
-# 3. Test certificate download
-Invoke-WebRequest -Uri "http://ca-server:9081/cacert" -OutFile test.crt
-
-# 4. Test authentication (if required)
-$cred = Get-Credential
-Invoke-WebRequest -Uri "http://ca-server:9081/templates" -Credential $cred
-```
 
 ### Step 5: Configure Advanced Settings (Optional)
 
@@ -122,13 +106,6 @@ Map PKI Trust Manager certificate templates to Microsoft CA templates:
    - **Authentication Type**: Windows Authentication
    - **Service Account**: Domain\svc-caapi
    - **Credentials**: Store securely in PKI Trust Manager
-
-#### Notification Settings
-1. Click **Notifications** tab
-2. Configure alerts for:
-   - Certificate issuance failures
-   - CA connectivity issues
-   - Template usage reports
 
 ---
 
