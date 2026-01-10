@@ -401,24 +401,13 @@ Get-Content $latestLog.FullName -Tail 20
 ## 🔌 Integration with PKI Trust Manager
 
 ### Configure PKI Trust Manager
-In PKI Trust Manager settings:
+In PKI Trust Manager - go to Integrations --> Certification Authorities:
 
-1. **CA Type**: Select "Microsoft CA via Proxy"
+1. **CA Type**: Select "Microsoft Enterprise CA"
 2. **Proxy URL**: `http://ca-api-server:9081/`
-3. **Authentication**: Windows Authentication (using service account)
-4. **CA Config**: Same as in web.config
+3. **Name**: Name of the CA
 
-### Test Integration from PKI Trust Manager
-```powershell
-# Example test from PKI Trust Manager server
-$cred = Get-Credential
-$response = Invoke-RestMethod -Uri "http://ca-api-server:9081/templates" `
-                              -Method Get `
-                              -Credential $cred
 
-Write-Host "Available certificate templates:"
-$response | Format-Table
-```
 
 ## 🐛 Troubleshooting
 
@@ -608,9 +597,8 @@ Write-Host "Troubleshooting package created: $zipFile"
 ```
 
 ### Contact Information
-- **Support Email**: support@securetron.com
-- **Documentation**: https://docs.securetron.com/ca-api-proxy
-- **Emergency Support**: +1-XXX-XXX-XXXX
+- **Support Email**: support@securetron.net
+- **Documentation**: https://securetron.net/documentation
 
 ---
 
