@@ -68,11 +68,11 @@ Select .NET Development stack to optimize the container app.
 
 Fill in the environment variable name, such as the initial Admin credentials and DB Connection String to define configuration.
 
-ADMIN__USERNAME=superadmin
-ADMIN__PASSWORD=YourUniquePassword
-ADMIN__EMAIL=pkiadmin@domain.local
-ConnectionStrings__OurDBContext=Your MSSQL DB Connection String
-Environment__CanMigrateData=True
+* ADMIN__USERNAME=superadmin
+* ADMIN__PASSWORD=YourUniquePassword
+* ADMIN__EMAIL=pkiadmin@domain.local
+* ConnectionStrings__OurDBContext=Your MSSQL DB Connection String
+* Environment__CanMigrateData=True
 
 ![Select Environment Variable Name](https://static.guidde.com/v0/qg%2FNF7l8sUngkQmFADnIfgiHyTW9Wk2%2FvoFiuMytKLKXQiqgJ6Jb5W%2Fi2UKu6L3rHQUMRL7UkNuj4_doc.png?alt=media&token=54e576cc-7408-4832-8e95-0408450d37e1)
 
