@@ -3,7 +3,7 @@
 
 [Click here to watch](https://youtu.be/Ufh1Dlyb1y4)
 
-### [![Quick guidde](https://static.guidde.com/v0/qg%2FNF7l8sUngkQmFADnIfgiHyTW9Wk2%2FvoFiuMytKLKXQiqgJ6Jb5W%2FqeVC7DLbTMhCZQVdGVdn8F_cover.png?alt=media&token=c941cc21-89ad-4d8a-b631-0d555c79a287)](https://app.guidde.com/share/playbooks/voFiuMytKLKXQiqgJ6Jb5W)
+### [![Quick guidde](https://static.guidde.com/v0/qg%2FNF7l8sUngkQmFADnIfgiHyTW9Wk2%2FvoFiuMytKLKXQiqgJ6Jb5W%2FqeVC7DLbTMhCZQVdGVdn8F_cover.png?alt=media&token=c941cc21-89ad-4d8a-b631-0d555c79a287)](https://youtu.be/Ufh1Dlyb1y4)
 
 This tutorial guides you through deploying the Securetron PKI Trust Manager to Azure.
 
