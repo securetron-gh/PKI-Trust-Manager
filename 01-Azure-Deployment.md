@@ -74,6 +74,7 @@ Fill in the environment variable name, such as the initial Admin credentials and
 * ADMIN__EMAIL=pkiadmin@domain.local
 * ConnectionStrings__OurDBContext=Your MSSQL DB Connection String
 * Environment__CanMigrateData=True
+
 **Recommended**
 * Scep__OtpValidityMinutes=525600
   
