@@ -53,8 +53,8 @@ Click image source to specify the container image, that will be deployed.
 
 Enter the Registry URL and image tag or version to specify, which container image version to deploy.
 
-Registry URL: securetron.azurecr.io
-Image Name and Tag: pkimain:latest
+* Container Registry URL: securetron.azurecr.io
+* Image Name and Tag: pkimain:latest
 
 ![Fill Image Tag](https://static.guidde.com/v0/qg%2FNF7l8sUngkQmFADnIfgiHyTW9Wk2%2FvoFiuMytKLKXQiqgJ6Jb5W%2F8pftJTHi9eXS5z7E9FdyQ7_doc.png?alt=media&token=9caff889-a045-4683-be41-b56eebcce4a1)
 
@@ -68,11 +68,33 @@ Select .NET Development stack to optimize the container app.
 
 Fill in the environment variable name, such as the initial Admin credentials and DB Connection String to define configuration.
 
+#Required#
 * ADMIN__USERNAME=superadmin
 * ADMIN__PASSWORD=YourUniquePassword
 * ADMIN__EMAIL=pkiadmin@domain.local
 * ConnectionStrings__OurDBContext=Your MSSQL DB Connection String
 * Environment__CanMigrateData=True
+
+* Scep__OtpValidityMinutes=525600
+  
+* Licensing__ServerUrl=Check_your_email_or_submit_request_for_license
+* Licensing__ApiKey=Check_your_email_or_submit_request_for_license
+* Licensing__ClientId=CompanyName-PKI-Trust-Manager
+
+* Licensing__OfflineMode=false
+* Licensing__EnableOnlineValidation=true
+
+* Smtp__Server=Your_SMTP_Server_FQDN
+* Smtp__Auth=true
+* Smtp__SenderName=PKI-Trust-Manager
+* Smtp__SenderAddress=Email_address@yourdomain.local
+* Smtp__ReceiverAddressOnError=Email_address@yourdomain.local
+* Smtp__ReceiverAddressOnEvent=Email_address@yourdomain.local
+* Smtp__Port=Your_SMTP_Server_Port
+* Smtp__Username=Your_SMTP_Username
+* Smtp__Password=Your_SMTP_Password
+* Smtp__EnableSsl=true
+
 
 ![Select Environment Variable Name](https://static.guidde.com/v0/qg%2FNF7l8sUngkQmFADnIfgiHyTW9Wk2%2FvoFiuMytKLKXQiqgJ6Jb5W%2Fi2UKu6L3rHQUMRL7UkNuj4_doc.png?alt=media&token=54e576cc-7408-4832-8e95-0408450d37e1)
 
