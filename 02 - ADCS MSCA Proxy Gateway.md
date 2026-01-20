@@ -1,7 +1,7 @@
 [Deploy PKI Trust Manager Microsoft CA Proxy Gateway](https://www.youtube.com/watch?v=k3lvyDKz-Ic)
 ==============================================================================================================
 
-[Click here to watch](https://app.guidde.com/share/playbooks/eCDM3TxKogNcNkgvgYbkqr)
+[Click here to watch](https://www.youtube.com/watch?v=k3lvyDKz-Ic)
 
 ### [![Quick guidde](https://static.guidde.com/v0/qg%2FNF7l8sUngkQmFADnIfgiHyTW9Wk2%2FeCDM3TxKogNcNkgvgYbkqr%2F8cvwAa6EQ2HYPaGoz17G1n_cover.png?alt=media&token=175e07b0-3d1d-4e39-9123-d47e79504692)](https://www.youtube.com/watch?v=k3lvyDKz-Ic)
 
