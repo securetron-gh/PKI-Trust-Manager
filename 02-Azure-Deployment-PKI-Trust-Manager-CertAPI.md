@@ -35,7 +35,7 @@ Enter the registry login server address, such as securetron.azurecr.io to connec
 
 ### 5\. Image & Tag
 
-Enter the Image and Tag such as Cert APIEE:Latest
+Enter the Image and Tag such as certapiee:latest
 
 ![Image & Tag](https://static.guidde.com/v0/qg%2FNF7l8sUngkQmFADnIfgiHyTW9Wk2%2F8CJdpoxk8kUtwBGnaRqeSY%2FjLCuwV6XNHZYPk3B9AdSmx_doc.png?alt=media&token=2e7226ff-83ae-45df-b2b5-ac2cf9c22425)
 
