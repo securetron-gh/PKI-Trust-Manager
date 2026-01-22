@@ -49,6 +49,18 @@ Select the .NET development stack to optimize the container.
 
 Enter the Environment variables such as ConnectionStrings\_\_OurDBContext, to link your app to the database. Additional variables are listed in the document.
 
+**Recommended**
+* Smtp__Server=Your_SMTP_Server_FQDN
+* Smtp__Auth=true
+* Smtp__SenderName=PKI-Trust-Manager-CertAPI
+* Smtp__SenderAddress=Email_address@yourdomain.local
+* Smtp__ReceiverAddressOnError=Email_address@yourdomain.local
+* Smtp__ReceiverAddressOnEvent=Email_address@yourdomain.local
+* Smtp__Port=Your_SMTP_Server_Port
+* Smtp__Username=Your_SMTP_Username
+* Smtp__Password=Your_SMTP_Password
+* Smtp__EnableSsl=true
+
 ![Environment Variables](https://static.guidde.com/v0/qg%2FNF7l8sUngkQmFADnIfgiHyTW9Wk2%2F8CJdpoxk8kUtwBGnaRqeSY%2Fvymn1NpQkjGcisSForBoNG_doc.png?alt=media&token=b148b6a9-b0c7-481c-a222-f8e426386621)
 
 ### 8\. Proceed To Ingress Settings
