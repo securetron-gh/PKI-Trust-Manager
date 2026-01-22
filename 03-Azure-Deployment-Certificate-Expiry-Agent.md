@@ -49,6 +49,11 @@ Select the .NET development stack to optimize the container.
 Enter the Environment variables such as ConnectionStrings\_\_OurDBContext, to link your app to the database. Additional variables are listed in the document.
 
 **Recommended**
+* CertExpiryNotificationPeriod__StartScanningRangeInXdays=${EXPIRY_START_RANGE:-3}
+* CertExpiryNotificationPeriod__EndScanningRangeInXdays=${EXPIRY_END_RANGE:-3}
+* CertExpiryNotificationPeriod__SendingNotificationEveryXdays=${EXPIRY_NOTIFY_INTERVAL:-1}
+* CertExpiryNotificationPeriod__ScanningIntervalEveryXminutes=${EXPIRY_SCAN_INTERVAL:-30}
+  
 * Smtp__Server=Your_SMTP_Server_FQDN
 * Smtp__Auth=true
 * Smtp__SenderName=PKI-Trust-Manager-CertAPI
