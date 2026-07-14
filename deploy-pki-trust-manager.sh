@@ -109,6 +109,33 @@ cd "$DEPLOY_DIR"
 # =============================================================================
 step "4/8 — Creating .env configuration file"
 
+# ---- Interactive SQL Server setup prompt ------------------------------------
+echo ""
+echo -e "${BOLD}SQL Server Configuration${NC}"
+echo ""
+echo "  1) Deploy built-in SQL Server container (default)"
+echo "  2) Connect to an external SQL Server (Enterprise)"
+echo ""
+read -p "  Choose [1/2]: " sql_choice
+
+SQL_USE_EXTERNAL="false"
+SQL_HOST="sqlserver.local"
+SQL_USER="sa"
+
+if [[ "$sql_choice" == "2" ]]; then
+  SQL_USE_EXTERNAL="true"
+  echo ""
+  read -p "  Enter SQL Server host / IP / FQDN: " SQL_HOST
+  read -p "  Enter SQL username [sa]: " tmp_user
+  SQL_USER="${tmp_user:-sa}"
+  read -s -p "  Enter SQL password: " SQL_SA_PASSWORD
+  echo ""
+  echo ""
+  info "External SQL Server configured — will skip sqlserver container"
+fi
+
+# -----------------------------------------------------------------------------
+
 cat > "$DEPLOY_DIR/.env" << 'ENVEOF'
 # ============================================
 # PKI Trust Manager - Environment Variables
@@ -124,16 +151,10 @@ SQL_SA_PASSWORD=PKI_Strong@Pass123
 SQL_PORT=1433
 SQL_DATABASE=PKIDBEE
 
-# EJBCA
-EJBCA_DB_ROOT_PASSWORD=foo123
-EJBCA_DB_NAME=ejbca
-EJBCA_DB_USER=ejbca
-EJBCA_DB_PASSWORD=ejbca
-EJBCA_HTTP_PORT=8080
-EJBCA_HTTPS_PORT=8443
-EJBCA_LOG_LEVEL=INFO
-EJBCA_CA_NAME=ManagementCA
-EJBCA_CA_PASSWORD=ejbca
+# External SQL Server (set SQL_USE_EXTERNAL=true and SQL_HOST/IP/FQDN to use an existing SQL Server instead of deploying a container)
+SQL_USE_EXTERNAL=false
+SQL_HOST=sqlserver.local
+SQL_USER=sa
 
 # Service Ports
 CAAPI_PORT=5051
@@ -221,6 +242,20 @@ ENVEOF
 chmod 600 "$DEPLOY_DIR/.env"
 info ".env created with defaults ($DEPLOY_DIR/.env)"
 
+# If the user chose external SQL, update the .env values
+if [[ "$SQL_USE_EXTERNAL" == "true" ]]; then
+  sed -i "s/^SQL_USE_EXTERNAL=.*$/SQL_USE_EXTERNAL=true/" "$DEPLOY_DIR/.env"
+  sed -i "s|^SQL_HOST=.*$|SQL_HOST=${SQL_HOST}|" "$DEPLOY_DIR/.env"
+  sed -i "s/^SQL_USER=.*$/SQL_USER=${SQL_USER}/" "$DEPLOY_DIR/.env"
+  sed -i "s|^SQL_SA_PASSWORD=.*$|SQL_SA_PASSWORD=${SQL_SA_PASSWORD}|" "$DEPLOY_DIR/.env"
+  info "External SQL configured: host=${SQL_HOST}, user=${SQL_USER}"
+fi
+
+# Source .env so script-level decisions (e.g. external SQL) are available
+set -a
+source "$DEPLOY_DIR/.env"
+set +a
+
 # =============================================================================
 # 5. Write docker-compose.deploy.yml
 # =============================================================================
@@ -237,7 +272,6 @@ networks:
 
 volumes:
   sqlserver-data:
-  ejbca-mariadb-data:
 
 services:
   # -------------------------------------------------------
@@ -265,62 +299,12 @@ services:
       start_period: 60s
 
   # -------------------------------------------------------
-  # MariaDB - EJBCA Database
-  # -------------------------------------------------------
-  ejbca-database:
-    hostname: ejbca-database
-    container_name: ejbca-database
-    image: library/mariadb:latest
-    networks:
-      - application-bridge
-    environment:
-      MYSQL_ROOT_PASSWORD: ${EJBCA_DB_ROOT_PASSWORD:-foo123}
-      MYSQL_DATABASE: ${EJBCA_DB_NAME:-ejbca}
-      MYSQL_USER: ${EJBCA_DB_USER:-ejbca}
-      MYSQL_PASSWORD: ${EJBCA_DB_PASSWORD:-ejbca}
-    volumes:
-      - ejbca-mariadb-data:/var/lib/mysql
-    restart: always
-    healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 40s
-
-  # -------------------------------------------------------
-  # EJBCA - Certificate Authority
-  # -------------------------------------------------------
-  ejbca:
-    hostname: ejbca.local
-    container_name: ejbca
-    image: keyfactor/ejbca-ce:latest
-    depends_on:
-      ejbca-database:
-        condition: service_healthy
-    networks:
-      - access-bridge
-      - application-bridge
-    environment:
-      DATABASE_JDBC_URL: jdbc:mariadb://ejbca-database:3306/${EJBCA_DB_NAME:-ejbca}?characterEncoding=UTF-8
-      LOG_LEVEL_APP: ${EJBCA_LOG_LEVEL:-INFO}
-      LOG_LEVEL_SERVER: ${EJBCA_LOG_LEVEL:-INFO}
-      TLS_SETUP_ENABLED: "true"
-    ports:
-      - "${EJBCA_HTTP_PORT:-8080}:8080"
-      - "${EJBCA_HTTPS_PORT:-8443}:8443"
-    restart: always
-
-  # -------------------------------------------------------
   # CA API - CA Proxy
   # -------------------------------------------------------
   caapi:
     hostname: caapi.local
     container_name: caapi
     image: securetron.azurecr.io/caapiee:${CAAPI_TAG:-latest}
-    depends_on:
-      ejbca:
-        condition: service_started
     networks:
       - application-bridge
     ports:
@@ -357,7 +341,7 @@ services:
       - ./license:/app/license:ro
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__OurDBContext=Server=sqlserver.local,1433;Database=${SQL_DATABASE:-PKIDBEE};User Id=sa;Password=${SQL_SA_PASSWORD:-PKI_Strong@Pass123};MultipleActiveResultSets=true;TrustServerCertificate=True;
+      - ConnectionStrings__OurDBContext=Server=${SQL_HOST:-sqlserver.local},${SQL_PORT:-1433};Database=${SQL_DATABASE:-PKIDBEE};User Id=${SQL_USER:-sa};Password=${SQL_SA_PASSWORD:-PKI_Strong@Pass123};MultipleActiveResultSets=true;TrustServerCertificate=True;
       - APIProvider__BaseUrl=${CERTAPI_INTERNAL_URL:-http://localhost:60713}
       - APIProvider__AppId=${CERTAPI_APP_ID:-084a72b6-11d7-4e82-af11-bae943fea0a5}
       - APIProvider__AppKey=${CERTAPI_APP_KEY:-9d4e0346-2a4c-407b-bdf5-699bb68a5b61}
@@ -403,7 +387,7 @@ services:
       - ./license:/app/license:ro
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__OurDBContext=Server=sqlserver.local,1433;Database=${SQL_DATABASE:-PKIDBEE};User Id=SA;Password=${SQL_SA_PASSWORD:-PKI_Strong@Pass123};MultipleActiveResultSets=true;TrustServerCertificate=True;
+      - ConnectionStrings__OurDBContext=Server=${SQL_HOST:-sqlserver.local},${SQL_PORT:-1433};Database=${SQL_DATABASE:-PKIDBEE};User Id=${SQL_USER:-sa};Password=${SQL_SA_PASSWORD:-PKI_Strong@Pass123};MultipleActiveResultSets=true;TrustServerCertificate=True;
       - Environment__Mode=${ENV_MODE:-Cloud}
       - Environment__TrustLevel=${TRUST_LEVEL:-Public}
       - APIProvider__BaseUrl=${CERTAPI_URL:-http://localhost:60713}
@@ -452,7 +436,7 @@ services:
       - application-bridge
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__OurDBContext=Server=sqlserver.local,1433;Database=${SQL_DATABASE:-PKIDBEE};User Id=SA;Password=${SQL_SA_PASSWORD:-PKI_Strong@Pass123};MultipleActiveResultSets=true;TrustServerCertificate=True;
+      - ConnectionStrings__OurDBContext=Server=${SQL_HOST:-sqlserver.local},${SQL_PORT:-1433};Database=${SQL_DATABASE:-PKIDBEE};User Id=${SQL_USER:-sa};Password=${SQL_SA_PASSWORD:-PKI_Strong@Pass123};MultipleActiveResultSets=true;TrustServerCertificate=True;
       - Smtp__Server=${SMTP_SERVER:-mail.smtp2go.com}
       - Smtp__Port=${SMTP_PORT:-2525}
       - Smtp__Auth=${SMTP_AUTH:-true}
@@ -498,6 +482,17 @@ services:
 COMPOSEEOF
 
 info "docker-compose.deploy.yml written"
+
+# If using external SQL, remove the built-in sqlserver service from compose
+if [[ "$SQL_USE_EXTERNAL" == "true" ]]; then
+  # Remove sqlserver service block (from comment to next section header)
+  sed -i '/^  # SQL Server - Main Database/,/^  # CA API/{/^  # CA API/!d}' "$DEPLOY_DIR/docker-compose.deploy.yml"
+  # Remove sqlserver depends_on ("      sqlserver:" + next line)
+  sed -i '/^      sqlserver:/{N;d}' "$DEPLOY_DIR/docker-compose.deploy.yml"
+  # Remove now-empty depends_on keys: delete "depends_on:" line but keep the next line
+  sed -i '/^    depends_on:$/{N; /\n    [a-z]/{s/^    depends_on:\n//}}' "$DEPLOY_DIR/docker-compose.deploy.yml"
+  info "External SQL configured — sqlserver container removed from compose"
+fi
 
 # =============================================================================
 # 6. Write nginx.minimal.conf
@@ -614,8 +609,6 @@ step "7/8 — Pulling container images"
 
 IMAGES=(
   "mcr.microsoft.com/mssql/server:2022-latest"
-  "library/mariadb:latest"
-  "keyfactor/ejbca-ce:latest"
   "securetron.azurecr.io/pkimain:latest"
   "securetron.azurecr.io/certapiee:latest"
   "securetron.azurecr.io/caapiee:latest"
@@ -624,6 +617,11 @@ IMAGES=(
 )
 
 for img in "${IMAGES[@]}"; do
+  # Skip SQL Server image when using an external database
+  if [[ "$SQL_USE_EXTERNAL" == "true" && "$img" == *"mssql"* ]]; then
+    info "Skipping $img (external SQL Server configured)"
+    continue
+  fi
   echo -n "  Pulling $img ... "
   if docker pull "$img" &>/dev/null; then
     echo -e "${GREEN}done${NC}"
@@ -659,20 +657,22 @@ echo ""
 info "Deployment initiated. Waiting for services to stabilise..."
 echo ""
 
-# Wait for SQL Server health check (longer for first boot)
-echo -n "  Waiting for SQL Server (up to 90s) ... "
-for i in $(seq 1 30); do
-  if docker inspect sqlserver --format='{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; then
-    echo -e "${GREEN}healthy${NC}"
-    break
-  fi
-  if [[ $i -eq 30 ]]; then
-    echo -e "${YELLOW}timeout (check 'docker logs sqlserver')${NC}"
-  else
-    sleep 3
-    echo -n "."
-  fi
-done
+# Wait for SQL Server health check (longer for first boot) — skip when using external DB
+if [[ "$SQL_USE_EXTERNAL" != "true" ]]; then
+  echo -n "  Waiting for SQL Server (up to 90s) ... "
+  for i in $(seq 1 30); do
+    if docker inspect sqlserver --format='{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; then
+      echo -e "${GREEN}healthy${NC}"
+      break
+    fi
+    if [[ $i -eq 30 ]]; then
+      echo -e "${YELLOW}timeout (check 'docker logs sqlserver')${NC}"
+    else
+      sleep 3
+      echo -n "."
+    fi
+  done
+fi
 
 echo ""
 echo -e "${CYAN}══════════════════════════════════════════════════════${NC}"
@@ -706,7 +706,6 @@ echo -e "  ${CYAN}Web Admin UI:${NC}       http://$IP_ADDR:5053/"
 echo -e "  ${CYAN}Web Admin (SSL):${NC}    https://$IP_ADDR/"
 echo -e "  ${CYAN}CertAPI Health:${NC}     http://$IP_ADDR:5052/health"
 echo -e "  ${CYAN}CAAPI Health:${NC}       http://$IP_ADDR:5051/health"
-echo -e "  ${CYAN}EJBCA Admin:${NC}        https://$IP_ADDR:8443/ejbca/"
 echo -e "  ${CYAN}SCEP:${NC}               http://$IP_ADDR:8895/scep"
 echo -e "  ${CYAN}ACME:${NC}               https://$IP_ADDR:8556/acme/directory"
 echo -e "  ${CYAN}EST:${NC}                https://$IP_ADDR:7031/.well-known/est"
@@ -728,7 +727,7 @@ echo ""
 echo "  1. Place license.bin → ${DEPLOY_DIR}/license/"
 echo "  2. Set LICENSE_PUBLIC_KEY in ${DEPLOY_DIR}/.env"
 echo "  3. Configure real SMTP credentials in ${DEPLOY_DIR}/.env"
-echo "  4. Change default passwords (ADMIN_PASSWORD, EJBCA_CA_PASSWORD)"
+echo "  4. Change default passwords (ADMIN_PASSWORD)"
 echo "  5. Restart affected services:"
 echo "     cd ${DEPLOY_DIR} && docker compose -f docker-compose.deploy.yml --env-file .env restart cmsweb certapi"
 echo ""
