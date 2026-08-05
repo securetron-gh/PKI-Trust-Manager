@@ -1,8 +1,6 @@
 [Enable SCEP Service in PKI Trust Manager](https://app.guidde.com/playbooks/viXvCCeuVqQjpR2Zh8BtyE)
 ===================================================================================================
 
-[Click here to watch](https://app.guidde.com/share/playbooks/viXvCCeuVqQjpR2Zh8BtyE)
-
 ### [![Quick guidde](https://static.guidde.com/v0/qg%2FNF7l8sUngkQmFADnIfgiHyTW9Wk2%2FviXvCCeuVqQjpR2Zh8BtyE%2FfbDd6tURC6Kx7pLC5Zsato_cover.png?alt=media&token=b4416cb7-cf01-43ce-a6ba-9f7568bc32fb)](https://app.guidde.com/share/playbooks/viXvCCeuVqQjpR2Zh8BtyE)
 
 This tutorial guides you through enabling the SCEP Service within the PKI Trust Manager. The PKI Trust Manager SCEP service should be used instead of Microsoft Network Device Enrollment Service. You will learn how to navigate the interface and configure necessary certificate templates for successful setup.
