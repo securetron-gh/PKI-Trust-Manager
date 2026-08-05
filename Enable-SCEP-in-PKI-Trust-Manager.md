@@ -65,13 +65,13 @@ As seen here, We have already published the SCEP-ENC and SCEP-Sign templates on 
 
 ### 9\. SCEPEnc Template Configuration
 
-There are three things that need to be configured for SCEP-ENC. 1st is the name of the template that will be displayed on PKI Trust Manager 2nd is the name of the template that we configured on the Certification Authority called SCEP-ENC and 3rd is enabling is Agent Certificate as shown in the screen capture here. Save the template after entering these details.
+There are FOUR things that need to be configured for SCEP-ENC. 1st is the name of the template that will be displayed on PKI Trust Manager 2nd is the name of the template that we configured on the Certification Authority called SCEP-ENC and 3rd is enabling is Agent Certificate as shown in the screen capture here. Finally, add the COMMON NAME field under SUBJECT INFORMATION then Save the template after entering these details.
 
 ![SCEPEnc Template Configuration](https://static.guidde.com/v0/qg%2FNF7l8sUngkQmFADnIfgiHyTW9Wk2%2FviXvCCeuVqQjpR2Zh8BtyE%2FbH6dBy3kugz9WoU65vRJNT_doc.png?alt=media&token=73e4a128-1649-4cb6-9e6f-61ef26e9cc0e)
 
 ### 10\. SCEPSign Template Configuration
 
-For SCEP-Sign There are also three things that need to be configured. 1st is the name of the template that will be displayed on PKI Trust Manager 2nd is the name of the template that we configured on the Certification Authority called SCEP-Sign and 3rd is enabling is Agent Certificate as shown in the screen capture here.
+For SCEP-Sign There are also FOUR things that need to be configured. 1st is the name of the template that will be displayed on PKI Trust Manager 2nd is the name of the template that we configured on the Certification Authority called SCEP-Sign and 3rd is enabling is Agent Certificate as shown in the screen capture here. Finally, add the COMMON NAME field under SUBJECT INFORMATION then Save the template after entering these details.
 
 ![SCEPSign Template Configuration](https://static.guidde.com/v0/qg%2FNF7l8sUngkQmFADnIfgiHyTW9Wk2%2FviXvCCeuVqQjpR2Zh8BtyE%2Fnn8wFxaL3BnFM2YBbHWV41_doc.png?alt=media&token=e7a48671-521f-4523-a2c7-f72f88a08194)
 
