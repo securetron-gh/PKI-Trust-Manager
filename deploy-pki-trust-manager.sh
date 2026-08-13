@@ -294,6 +294,89 @@ fqdn_update() {
   fi
 }
 
+ask_smtp() {
+  echo ""
+  read -p "  Configure SMTP for email notifications? [y/N]: " smtp_choice
+  if [[ "${smtp_choice,,}" == "y" ]]; then
+    read -p "    SMTP server [${SMTP_SERVER:-mail.smtp2go.com}]: " tmp
+    SMTP_SERVER="${tmp:-$SMTP_SERVER}"
+    read -p "    SMTP port [${SMTP_PORT:-2525}]: " tmp
+    SMTP_PORT="${tmp:-$SMTP_PORT}"
+    read -p "    SMTP username: " SMTP_USERNAME
+    read -s -p "    SMTP password: " SMTP_PASSWORD
+    echo ""
+    read -p "    Sender email [${SMTP_SENDER:-noreply@yourdomain.com}]: " tmp
+    SMTP_SENDER="${tmp:-$SMTP_SENDER}"
+    read -p "    Sender name [${SMTP_SENDER_NAME:-PKI}]: " tmp
+    SMTP_SENDER_NAME="${tmp:-$SMTP_SENDER_NAME}"
+    info "SMTP configured: ${SMTP_SERVER}"
+  fi
+}
+
+persist_smtp_env() {
+  if [[ "${smtp_choice,,}" == "y" ]]; then
+    sed -i "s|^SMTP_SERVER=.*|SMTP_SERVER=\"${SMTP_SERVER}\"|" "$DEPLOY_DIR/.env"
+    sed -i "s|^SMTP_PORT=.*|SMTP_PORT=\"${SMTP_PORT}\"|" "$DEPLOY_DIR/.env"
+    sed -i "s|^SMTP_USERNAME=.*|SMTP_USERNAME=\"${SMTP_USERNAME}\"|" "$DEPLOY_DIR/.env"
+    sed -i "s|^SMTP_PASSWORD=.*|SMTP_PASSWORD=\"${SMTP_PASSWORD}\"|" "$DEPLOY_DIR/.env"
+    sed -i "s|^SMTP_SENDER=.*|SMTP_SENDER=\"${SMTP_SENDER}\"|" "$DEPLOY_DIR/.env"
+    sed -i "s|^SMTP_SENDER_NAME=.*|SMTP_SENDER_NAME=\"${SMTP_SENDER_NAME}\"|" "$DEPLOY_DIR/.env"
+  fi
+}
+
+smtp_update() {
+  echo ""
+  if [[ ! -f "$DEPLOY_DIR/.env" ]]; then
+    warn "No deployment found at $DEPLOY_DIR — run option 1 (Re-Deploy) first"
+    exit 1
+  fi
+  set -a; source "$DEPLOY_DIR/.env"; set +a
+  ask_smtp
+  persist_smtp_env
+  info "Applying SMTP settings to cmsweb + certapi..."
+  cd "$DEPLOY_DIR"
+  docker compose -f docker-compose.deploy.yml --env-file .env up -d cmsweb certapi || {
+    err "Failed to recreate cmsweb/certapi — check 'docker compose ... ps'"
+    exit 1
+  }
+  docker compose -f docker-compose.deploy.yml --env-file .env restart nginx >/dev/null 2>&1 || true
+  info "SMTP updated"
+}
+
+admin_password_update() {
+  echo ""
+  if [[ ! -f "$DEPLOY_DIR/.env" ]]; then
+    warn "No deployment found at $DEPLOY_DIR — run option 1 (Re-Deploy) first"
+    exit 1
+  fi
+  echo "  Enter the new ROOT (admin) password used by the Web UI (ADMIN_PASSWORD)."
+  echo ""
+  read -s -p "  New ROOT password: " ADMIN_PASSWORD
+  echo ""
+  read -s -p "  Confirm ROOT password: " confirm
+  echo ""
+  if [[ -z "$ADMIN_PASSWORD" ]]; then
+    err "Password cannot be empty"
+    exit 1
+  fi
+  if [[ "$ADMIN_PASSWORD" != "$confirm" ]]; then
+    err "Passwords do not match"
+    exit 1
+  fi
+  sed -i "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=\"${ADMIN_PASSWORD}\"|" "$DEPLOY_DIR/.env"
+  info "ROOT password updated in .env"
+  info "Recreating cmsweb to apply..."
+  cd "$DEPLOY_DIR"
+  docker compose -f docker-compose.deploy.yml --env-file .env up -d cmsweb || {
+    err "Failed to recreate cmsweb — check 'docker compose ... ps'"
+    exit 1
+  }
+  docker compose -f docker-compose.deploy.yml --env-file .env restart nginx >/dev/null 2>&1 || true
+  info "ROOT password applied"
+  echo "  Note: if the superadmin user already exists in the DB, also change its"
+  echo "  password in the Web UI (Profile / Users) — ADMIN_PASSWORD only seeds new users."
+}
+
 # =============================================================================
 # Main menu
 # =============================================================================
@@ -306,11 +389,15 @@ echo ""
 echo "  1) Re-Deploy or Update all containers"
 echo "  2) Add or Modify FQDNs"
 echo "  3) Provide details of the containers (Name, FQDN, Status, Health)"
+echo "  4) Set / change the ROOT (admin) password"
+echo "  5) Configure SMTP"
 echo ""
-read -p "  Choose [1/2/3]: " action
+read -p "  Choose [1/2/3/4/5]: " action
 case "$action" in
   2) fqdn_update; exit 0 ;;
   3) show_details; exit 0 ;;
+  4) admin_password_update; exit 0 ;;
+  5) smtp_update; exit 0 ;;
   *) info "Full deployment selected" ;;
 esac
 
@@ -393,22 +480,7 @@ fi
 ask_fqdn
 
 # ---- Interactive SMTP setup prompt (optional) --------------------------------
-echo ""
-read -p "  Configure SMTP for email notifications? [y/N]: " smtp_choice
-if [[ "${smtp_choice,,}" == "y" ]]; then
-  read -p "    SMTP server [${SMTP_SERVER:-mail.smtp2go.com}]: " tmp
-  SMTP_SERVER="${tmp:-$SMTP_SERVER}"
-  read -p "    SMTP port [${SMTP_PORT:-2525}]: " tmp
-  SMTP_PORT="${tmp:-$SMTP_PORT}"
-  read -p "    SMTP username: " SMTP_USERNAME
-  read -s -p "    SMTP password: " SMTP_PASSWORD
-  echo ""
-  read -p "    Sender email [${SMTP_SENDER:-noreply@yourdomain.com}]: " tmp
-  SMTP_SENDER="${tmp:-$SMTP_SENDER}"
-  read -p "    Sender name [${SMTP_SENDER_NAME:-PKI}]: " tmp
-  SMTP_SENDER_NAME="${tmp:-$SMTP_SENDER_NAME}"
-  info "SMTP configured: ${SMTP_SERVER}"
-fi
+ask_smtp
 
 # -----------------------------------------------------------------------------
 
@@ -530,14 +602,7 @@ fi
 persist_fqdn_env
 
 # Persist SMTP settings if the user chose to configure them
-if [[ "${smtp_choice,,}" == "y" ]]; then
-  sed -i "s|^SMTP_SERVER=.*|SMTP_SERVER=\"${SMTP_SERVER}\"|" "$DEPLOY_DIR/.env"
-  sed -i "s|^SMTP_PORT=.*|SMTP_PORT=\"${SMTP_PORT}\"|" "$DEPLOY_DIR/.env"
-  sed -i "s|^SMTP_USERNAME=.*|SMTP_USERNAME=\"${SMTP_USERNAME}\"|" "$DEPLOY_DIR/.env"
-  sed -i "s|^SMTP_PASSWORD=.*|SMTP_PASSWORD=\"${SMTP_PASSWORD}\"|" "$DEPLOY_DIR/.env"
-  sed -i "s|^SMTP_SENDER=.*|SMTP_SENDER=\"${SMTP_SENDER}\"|" "$DEPLOY_DIR/.env"
-  sed -i "s|^SMTP_SENDER_NAME=.*|SMTP_SENDER_NAME=\"${SMTP_SENDER_NAME}\"|" "$DEPLOY_DIR/.env"
-fi
+persist_smtp_env
 
 # Source .env so script-level decisions (e.g. external SQL) are available
 set -a
@@ -926,11 +991,10 @@ echo ""
 # ---- Next Steps ----
 echo -e "${BOLD}Next Steps${NC}"
 echo ""
-echo "  1. Place license.bin → ${DEPLOY_DIR}/license/"
-echo "  2. Set LICENSE_PUBLIC_KEY in ${DEPLOY_DIR}/.env"
-echo "  3. Configure real SMTP credentials in ${DEPLOY_DIR}/.env"
-echo "  4. Change default passwords (ADMIN_PASSWORD)"
-echo "  5. Restart affected services:"
+echo "  1. Submit License Application form at https://securetron.net/download/ or support@securetron.net"
+echo "  2. Configure real SMTP credentials in ${DEPLOY_DIR}/.env"
+echo "  3. Change default ROOT password (ADMIN_PASSWORD)"
+echo "  4. Restart affected services:"
 echo "     cd ${DEPLOY_DIR} && docker compose -f docker-compose.deploy.yml --env-file .env restart cmsweb certapi"
 echo ""
 
