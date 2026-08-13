@@ -46,6 +46,275 @@ if snap list docker &>/dev/null; then
 fi
 
 # =============================================================================
+# Functions
+# =============================================================================
+ask_fqdn() {
+  echo ""
+  echo -e "${BOLD}Domain / FQDN Configuration${NC}"
+  echo ""
+  echo "  Used for public nginx hostnames: certapi.<fqdn>, web.<fqdn>, scep.<fqdn>,"
+  echo "  est.<fqdn>, acme.<fqdn> (e.g. secure.tron in the lab, yourdomain.com in production)."
+  echo "  Leave empty to use only internal .local hostnames. Press Enter to keep current."
+  echo ""
+  read -p "  Enter your base domain [${BASE_DOMAIN:-none}]: " new_base
+  BASE_DOMAIN=$(echo "${new_base:-$BASE_DOMAIN}" | xargs)
+  echo ""
+  echo "  Additional FQDNs (optional) - comma-separated list, press Enter to keep current:"
+  echo "  (used in addition to the derived scep.<base>, est.<base>, acme.<base>)"
+  read -p "    SCEP [${EXTRA_SCEP_FQDNS:-none}]: " new_scep
+  EXTRA_SCEP_FQDNS=$(echo "${new_scep:-$EXTRA_SCEP_FQDNS}" | xargs)
+  read -p "    EST  [${EXTRA_EST_FQDNS:-none}]: " new_est
+  EXTRA_EST_FQDNS=$(echo "${new_est:-$EXTRA_EST_FQDNS}" | xargs)
+  read -p "    ACME [${EXTRA_ACME_FQDNS:-none}]: " new_acme
+  EXTRA_ACME_FQDNS=$(echo "${new_acme:-$EXTRA_ACME_FQDNS}" | xargs)
+  if [[ -n "$BASE_DOMAIN" ]]; then
+    info "FQDN set: *.$BASE_DOMAIN — nginx will serve public hostnames"
+  else
+    info "No FQDN — nginx will use internal .local hostnames only"
+  fi
+}
+
+persist_fqdn_env() {
+  sed -i "s|^BASE_DOMAIN=.*|BASE_DOMAIN=\"${BASE_DOMAIN}\"|" "$DEPLOY_DIR/.env"
+  sed -i "s|^EXTRA_SCEP_FQDNS=.*|EXTRA_SCEP_FQDNS=\"${EXTRA_SCEP_FQDNS}\"|" "$DEPLOY_DIR/.env"
+  sed -i "s|^EXTRA_EST_FQDNS=.*|EXTRA_EST_FQDNS=\"${EXTRA_EST_FQDNS}\"|" "$DEPLOY_DIR/.env"
+  sed -i "s|^EXTRA_ACME_FQDNS=.*|EXTRA_ACME_FQDNS=\"${EXTRA_ACME_FQDNS}\"|" "$DEPLOY_DIR/.env"
+}
+
+write_nginx_conf() {
+  cat > "$DEPLOY_DIR/nginx.minimal.conf" << 'NGINXEOF'
+events { worker_connections 1024; }
+
+http {
+    upstream local_certapi_apps {
+        server certapi.local:60713 max_fails=3 fail_timeout=30s;
+    }
+    upstream local_cmsweb_apps {
+        server cmsweb.local:5228 max_fails=3 fail_timeout=30s;
+    }
+
+    # EST Local
+    server {
+        listen 7031 ssl;
+        server_name est.local __EST_FQDN__;
+        ssl_certificate /etc/nginx/cert.crt;
+        ssl_certificate_key /etc/nginx/key.pem;
+        ssl_verify_client optional_no_ca;
+        location / {
+            proxy_pass http://local_certapi_apps;
+            proxy_set_header Host $host;
+            proxy_set_header Authorization $http_authorization;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Client-Cert $ssl_client_escaped_cert;
+        }
+    }
+
+    # SCEP HTTP
+    server {
+        listen 8895;
+        server_name scep.local __SCEP_FQDN__;
+        location / {
+            proxy_pass http://local_certapi_apps;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+    }
+
+    # SCEP HTTPS
+    server {
+        listen 8896 ssl;
+        server_name scep.local __SCEP_FQDN__;
+        ssl_certificate /etc/nginx/cert.crt;
+        ssl_certificate_key /etc/nginx/key.pem;
+        location / {
+            proxy_pass http://local_certapi_apps;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+    }
+
+    # ACME Local
+    server {
+        listen 8556 ssl;
+        server_name acme.local __ACME_FQDN__;
+        ssl_certificate /etc/nginx/cert.crt;
+        ssl_certificate_key /etc/nginx/key.pem;
+        location / {
+            proxy_pass http://local_certapi_apps;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+    }
+
+    # CertAPI, SCEP, EST, ACME via Nginx (port 443, cmsapi.local)
+    server {
+        listen 443 ssl;
+        server_name cmsapi.local __CERTAPI_FQDN__ __SCEP_HOSTS__ __EST_HOSTS__ __ACME_HOSTS__;
+        ssl_certificate /etc/nginx/cert.crt;
+        ssl_certificate_key /etc/nginx/key.pem;
+        location / {
+            proxy_pass http://local_certapi_apps;
+            proxy_set_header Host $host;
+            proxy_set_header Authorization $http_authorization;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+    }
+
+    # Web UI via Nginx (port 443 default, cmsweb.local)
+    server {
+        listen 443 ssl default_server;
+        server_name cmsweb.local __WEB_FQDN__;
+        ssl_certificate /etc/nginx/cert.crt;
+        ssl_certificate_key /etc/nginx/key.pem;
+        location / {
+            proxy_pass http://local_cmsweb_apps;
+            proxy_set_header Host $host;
+            proxy_set_header Authorization $http_authorization;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+    }
+
+    # HTTP (port 80) - CertAPI, SCEP, EST, ACME
+    server {
+        listen 80;
+        server_name cmsapi.local __CERTAPI_FQDN__ __SCEP_HOSTS__ __EST_HOSTS__ __ACME_HOSTS__;
+        location / {
+            proxy_pass http://local_certapi_apps;
+            proxy_set_header Host $host;
+            proxy_set_header Authorization $http_authorization;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+    }
+
+    # HTTP (port 80) - Web UI → redirect to HTTPS
+    server {
+        listen 80;
+        server_name cmsweb.local __WEB_FQDN__;
+        return 301 https://$host$request_uri;
+    }
+}
+NGINXEOF
+
+  # Build per-service FQDN lists (base-derived + optional extras)
+  EST_FQDNS=""; SCEP_FQDNS=""; ACME_FQDNS=""; CERTAPI_FQDNS=""; WEB_FQDNS=""
+  if [[ -n "$BASE_DOMAIN" ]]; then
+    EST_FQDNS="est.$BASE_DOMAIN"
+    SCEP_FQDNS="scep.$BASE_DOMAIN"
+    ACME_FQDNS="acme.$BASE_DOMAIN"
+    CERTAPI_FQDNS="certapi.$BASE_DOMAIN"
+    WEB_FQDNS="web.$BASE_DOMAIN"
+  fi
+  if [[ -n "$EXTRA_EST_FQDNS" ]]; then  EST_FQDNS="$EST_FQDNS $(echo "$EXTRA_EST_FQDNS" | tr ',' ' ')"; fi
+  if [[ -n "$EXTRA_SCEP_FQDNS" ]]; then SCEP_FQDNS="$SCEP_FQDNS $(echo "$EXTRA_SCEP_FQDNS" | tr ',' ' ')"; fi
+  if [[ -n "$EXTRA_ACME_FQDNS" ]]; then ACME_FQDNS="$ACME_FQDNS $(echo "$EXTRA_ACME_FQDNS" | tr ',' ' ')"; fi
+
+  # Substitute FQDN placeholders
+  if [[ -n "$EST_FQDNS" ]]; then  sed -i "s| __EST_FQDN__| $EST_FQDNS|g" "$DEPLOY_DIR/nginx.minimal.conf";  else sed -i "s| __EST_FQDN__||g" "$DEPLOY_DIR/nginx.minimal.conf"; fi
+  if [[ -n "$SCEP_FQDNS" ]]; then sed -i "s| __SCEP_FQDN__| $SCEP_FQDNS|g" "$DEPLOY_DIR/nginx.minimal.conf"; else sed -i "s| __SCEP_FQDN__||g" "$DEPLOY_DIR/nginx.minimal.conf"; fi
+  if [[ -n "$ACME_FQDNS" ]]; then sed -i "s| __ACME_FQDN__| $ACME_FQDNS|g" "$DEPLOY_DIR/nginx.minimal.conf"; else sed -i "s| __ACME_FQDN__||g" "$DEPLOY_DIR/nginx.minimal.conf"; fi
+  if [[ -n "$CERTAPI_FQDNS" ]]; then sed -i "s| __CERTAPI_FQDN__| $CERTAPI_FQDNS|g" "$DEPLOY_DIR/nginx.minimal.conf"; else sed -i "s| __CERTAPI_FQDN__||g" "$DEPLOY_DIR/nginx.minimal.conf"; fi
+  if [[ -n "$WEB_FQDNS" ]]; then sed -i "s| __WEB_FQDN__| $WEB_FQDNS|g" "$DEPLOY_DIR/nginx.minimal.conf"; else sed -i "s| __WEB_FQDN__||g" "$DEPLOY_DIR/nginx.minimal.conf"; fi
+  # 443 block: route scep/est/acme FQDNs to certapi too
+  if [[ -n "$SCEP_FQDNS" ]]; then sed -i "s| __SCEP_HOSTS__| $SCEP_FQDNS|g" "$DEPLOY_DIR/nginx.minimal.conf"; else sed -i "s| __SCEP_HOSTS__||g" "$DEPLOY_DIR/nginx.minimal.conf"; fi
+  if [[ -n "$EST_FQDNS" ]]; then  sed -i "s| __EST_HOSTS__| $EST_FQDNS|g" "$DEPLOY_DIR/nginx.minimal.conf";  else sed -i "s| __EST_HOSTS__||g" "$DEPLOY_DIR/nginx.minimal.conf"; fi
+  if [[ -n "$ACME_FQDNS" ]]; then sed -i "s| __ACME_HOSTS__| $ACME_FQDNS|g" "$DEPLOY_DIR/nginx.minimal.conf"; else sed -i "s| __ACME_HOSTS__||g" "$DEPLOY_DIR/nginx.minimal.conf"; fi
+  info "FQDN hostnames: certapi=${CERTAPI_FQDNS:-<none>} web=${WEB_FQDNS:-<none>} scep=${SCEP_FQDNS:-<none>} est=${EST_FQDNS:-<none>} acme=${ACME_FQDNS:-<none>}"
+}
+
+show_details() {
+  echo ""
+  echo -e "${BOLD}Container Details${NC}"
+  echo ""
+  if [[ ! -f "$DEPLOY_DIR/docker-compose.deploy.yml" ]]; then
+    warn "No deployment found at $DEPLOY_DIR — run option 1 (Re-Deploy) first"
+    return
+  fi
+  if [[ -f "$DEPLOY_DIR/.env" ]]; then
+    set -a; source "$DEPLOY_DIR/.env"; set +a
+  fi
+  docker compose -f "$DEPLOY_DIR/docker-compose.deploy.yml" --env-file "$DEPLOY_DIR/.env" ps 2>/dev/null | grep -v WARNING || true
+  echo ""
+  echo -e "${BOLD}Name | Hostname | IP | Status | Health${NC}"
+  for c in $(docker compose -f "$DEPLOY_DIR/docker-compose.deploy.yml" --env-file "$DEPLOY_DIR/.env" ps -q 2>/dev/null); do
+    name=$(docker inspect "$c" --format '{{.Name}}' | sed 's|^/||')
+    host=$(docker inspect "$c" --format '{{.Config.Hostname}}')
+    ip=$(docker inspect "$c" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}')
+    state=$(docker inspect "$c" --format '{{.State.Status}}')
+    health=$(docker inspect "$c" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}-{{end}}')
+    printf "  %-15s %-20s %-18s %-10s %s\n" "$name" "$host" "$ip" "$state" "$health"
+  done
+  echo ""
+  echo -e "${BOLD}FQDN Mapping${NC}"
+  if [[ -n "$BASE_DOMAIN" ]]; then
+    echo "  certapi -> certapi.$BASE_DOMAIN"
+    echo "  web     -> web.$BASE_DOMAIN"
+    echo "  scep    -> scep.$BASE_DOMAIN${EXTRA_SCEP_FQDNS:+ , $EXTRA_SCEP_FQDNS}"
+    echo "  est     -> est.$BASE_DOMAIN${EXTRA_EST_FQDNS:+ , $EXTRA_EST_FQDNS}"
+    echo "  acme    -> acme.$BASE_DOMAIN${EXTRA_ACME_FQDNS:+ , $EXTRA_ACME_FQDNS}"
+  else
+    echo "  No FQDNs configured (BASE_DOMAIN empty) — .local hostnames only"
+  fi
+}
+
+fqdn_update() {
+  echo ""
+  if [[ ! -f "$DEPLOY_DIR/docker-compose.deploy.yml" ]]; then
+    warn "No deployment found at $DEPLOY_DIR — run option 1 (Re-Deploy) first"
+    exit 1
+  fi
+  if [[ -f "$DEPLOY_DIR/.env" ]]; then
+    set -a; source "$DEPLOY_DIR/.env"; set +a
+  fi
+  ask_fqdn
+  persist_fqdn_env
+  write_nginx_conf
+  info "Applying FQDN changes to the running nginx container..."
+  cd "$DEPLOY_DIR"
+  docker compose -f docker-compose.deploy.yml --env-file .env up -d --force-recreate nginx || {
+    err "Failed to recreate nginx — check 'docker compose ... ps'"
+    exit 1
+  }
+  info "nginx recreated with updated FQDNs"
+  echo ""
+  echo -e "${BOLD}New Access Points${NC}"
+  if [[ -n "$BASE_DOMAIN" ]]; then
+    echo "  Web Admin: https://web.$BASE_DOMAIN/"
+    echo "  CertAPI:   https://certapi.$BASE_DOMAIN/"
+    echo "  SCEP:      http://scep.$BASE_DOMAIN:8895/scep${EXTRA_SCEP_FQDNS:+ ($EXTRA_SCEP_FQDNS)}"
+    echo "  EST:       https://est.$BASE_DOMAIN:7031/.well-known/est${EXTRA_EST_FQDNS:+ ($EXTRA_EST_FQDNS)}"
+    echo "  ACME:      https://acme.$BASE_DOMAIN:8556/acme/directory${EXTRA_ACME_FQDNS:+ ($EXTRA_ACME_FQDNS)}"
+  fi
+}
+
+# =============================================================================
+# Main menu
+# =============================================================================
+header
+echo -e "${CYAN}PKI Trust Manager — Automated Deployment${NC}"
+header
+echo ""
+echo -e "${BOLD}Choose an action:${NC}"
+echo ""
+echo "  1) Re-Deploy or Update all containers"
+echo "  2) Add or Modify FQDNs"
+echo "  3) Provide details of the containers (Name, FQDN, Status, Health)"
+echo ""
+read -p "  Choose [1/2/3]: " action
+case "$action" in
+  2) fqdn_update; exit 0 ;;
+  3) show_details; exit 0 ;;
+  *) info "Full deployment selected" ;;
+esac
+
+# =============================================================================
 # 1. Install Docker + Docker Compose (if missing)
 # =============================================================================
 header
@@ -91,23 +360,9 @@ chmod 755 "$DEPLOY_DIR"
 info "Directories created"
 
 # =============================================================================
-# 3. Generate self-signed TLS certificates for Nginx
+# 3. Create .env file with safe defaults
 # =============================================================================
-step "3/8 — Generating self-signed TLS certificates"
-
-cd "$DEPLOY_DIR/certs"
-openssl genrsa -out key.pem 2048 2>/dev/null
-openssl req -new -x509 -key key.pem -out cert.crt -days 365 \
-  -subj "/C=US/ST=State/L=City/O=PKI-Trust-Manager/CN=*.local" 2>/dev/null
-chmod 600 key.pem
-chmod 644 cert.crt
-info "Certificates created: cert.crt + key.pem (valid 365 days, self-signed)"
-cd "$DEPLOY_DIR"
-
-# =============================================================================
-# 4. Create .env file with safe defaults
-# =============================================================================
-step "4/8 — Creating .env configuration file"
+step "3/8 — Creating .env configuration file"
 
 # ---- Interactive SQL Server setup prompt ------------------------------------
 echo ""
@@ -134,6 +389,27 @@ if [[ "$sql_choice" == "2" ]]; then
   info "External SQL Server configured — will skip sqlserver container"
 fi
 
+# ---- Interactive FQDN / domain prompt ----------------------------------------
+ask_fqdn
+
+# ---- Interactive SMTP setup prompt (optional) --------------------------------
+echo ""
+read -p "  Configure SMTP for email notifications? [y/N]: " smtp_choice
+if [[ "${smtp_choice,,}" == "y" ]]; then
+  read -p "    SMTP server [${SMTP_SERVER:-mail.smtp2go.com}]: " tmp
+  SMTP_SERVER="${tmp:-$SMTP_SERVER}"
+  read -p "    SMTP port [${SMTP_PORT:-2525}]: " tmp
+  SMTP_PORT="${tmp:-$SMTP_PORT}"
+  read -p "    SMTP username: " SMTP_USERNAME
+  read -s -p "    SMTP password: " SMTP_PASSWORD
+  echo ""
+  read -p "    Sender email [${SMTP_SENDER:-noreply@yourdomain.com}]: " tmp
+  SMTP_SENDER="${tmp:-$SMTP_SENDER}"
+  read -p "    Sender name [${SMTP_SENDER_NAME:-PKI}]: " tmp
+  SMTP_SENDER_NAME="${tmp:-$SMTP_SENDER_NAME}"
+  info "SMTP configured: ${SMTP_SERVER}"
+fi
+
 # -----------------------------------------------------------------------------
 
 cat > "$DEPLOY_DIR/.env" << 'ENVEOF'
@@ -156,6 +432,14 @@ SQL_USE_EXTERNAL=false
 SQL_HOST=sqlserver.local
 SQL_USER=sa
 
+# Base domain for public nginx hostnames (e.g. certapi.<BASE_DOMAIN>, web.<BASE_DOMAIN>)
+BASE_DOMAIN=
+
+# Additional FQDNs for SCEP / EST / ACME (comma-separated, optional)
+EXTRA_SCEP_FQDNS=
+EXTRA_EST_FQDNS=
+EXTRA_ACME_FQDNS=
+
 # Service Ports
 CAAPI_PORT=5051
 CERTAPI_PORT=5052
@@ -171,6 +455,7 @@ NGINX_SCEP_HTTPS_PORT=8943
 NGINX_ACME_CLOUD_PORT=8555
 NGINX_ACME_LOCAL_PORT=8556
 NGINX_HTTPS_PORT=443
+NGINX_HTTP_PORT=80
 
 # Admin User (CHANGE THESE IN PRODUCTION)
 ADMIN_USERNAME=superadmin
@@ -200,14 +485,7 @@ CERTAPI_CLIENT_ID=certapi-001
 
 # API Provider Configuration (for hybrid mode)
 CERTAPI_INTERNAL_URL=http://localhost:60713
-CERTAPI_APP_ID=084a72b6-11d7-4e82-af11-bae943fea0a5
-CERTAPI_APP_KEY=9d4e0346-2a4c-407b-bdf5-699bb68a5b61
 CERTAPI_URL=http://localhost:60713
-CMSWEB_APP_ID=b74ad6d9-6418-407a-b36e-69613d35517a
-CMSWEB_APP_KEY=70803d70-3d0f-47fd-a206-cff4d0c15777
-CERTAPI_AGENT_URL=http://localhost:5052/local
-AGENT_APP_ID=084a72b6-11d7-4e82-af11-bae943fea0a5
-AGENT_APP_KEY=9d4e0346-2a4c-407b-bdf5-699bb68a5b61
 
 # ACME / SCEP
 ACME_REUSE_VALIDATION=false
@@ -232,9 +510,6 @@ TRUST_LEVEL=Private
 LOG_LEVEL=Debug
 LOG_LEVEL_MS=Warning
 
-# Cloud/External
-CLOUD_IP=192.168.20.1
-
 # Data Migration
 Environment_CanMigrateData=true
 ENVEOF
@@ -245,16 +520,45 @@ info ".env created with defaults ($DEPLOY_DIR/.env)"
 # If the user chose external SQL, update the .env values
 if [[ "$SQL_USE_EXTERNAL" == "true" ]]; then
   sed -i "s/^SQL_USE_EXTERNAL=.*$/SQL_USE_EXTERNAL=true/" "$DEPLOY_DIR/.env"
-  sed -i "s|^SQL_HOST=.*$|SQL_HOST=${SQL_HOST}|" "$DEPLOY_DIR/.env"
-  sed -i "s/^SQL_USER=.*$/SQL_USER=${SQL_USER}/" "$DEPLOY_DIR/.env"
-  sed -i "s|^SQL_SA_PASSWORD=.*$|SQL_SA_PASSWORD=${SQL_SA_PASSWORD}|" "$DEPLOY_DIR/.env"
+  sed -i "s|^SQL_HOST=.*$|SQL_HOST=\"${SQL_HOST}\"|" "$DEPLOY_DIR/.env"
+  sed -i "s/^SQL_USER=.*$/SQL_USER=\"${SQL_USER}\"/" "$DEPLOY_DIR/.env"
+  sed -i "s|^SQL_SA_PASSWORD=.*$|SQL_SA_PASSWORD=\"${SQL_SA_PASSWORD}\"|" "$DEPLOY_DIR/.env"
   info "External SQL configured: host=${SQL_HOST}, user=${SQL_USER}"
+fi
+
+# Persist the user-provided base domain and extras into .env
+persist_fqdn_env
+
+# Persist SMTP settings if the user chose to configure them
+if [[ "${smtp_choice,,}" == "y" ]]; then
+  sed -i "s|^SMTP_SERVER=.*|SMTP_SERVER=\"${SMTP_SERVER}\"|" "$DEPLOY_DIR/.env"
+  sed -i "s|^SMTP_PORT=.*|SMTP_PORT=\"${SMTP_PORT}\"|" "$DEPLOY_DIR/.env"
+  sed -i "s|^SMTP_USERNAME=.*|SMTP_USERNAME=\"${SMTP_USERNAME}\"|" "$DEPLOY_DIR/.env"
+  sed -i "s|^SMTP_PASSWORD=.*|SMTP_PASSWORD=\"${SMTP_PASSWORD}\"|" "$DEPLOY_DIR/.env"
+  sed -i "s|^SMTP_SENDER=.*|SMTP_SENDER=\"${SMTP_SENDER}\"|" "$DEPLOY_DIR/.env"
+  sed -i "s|^SMTP_SENDER_NAME=.*|SMTP_SENDER_NAME=\"${SMTP_SENDER_NAME}\"|" "$DEPLOY_DIR/.env"
 fi
 
 # Source .env so script-level decisions (e.g. external SQL) are available
 set -a
 source "$DEPLOY_DIR/.env"
 set +a
+
+# =============================================================================
+# 4. Generate self-signed TLS certificates for Nginx
+# =============================================================================
+step "4/8 — Generating self-signed TLS certificates"
+
+cd "$DEPLOY_DIR/certs"
+openssl genrsa -out key.pem 2048 2>/dev/null
+openssl req -new -x509 -key key.pem -out cert.crt -days 365 \
+  -subj "/C=US/ST=State/L=City/O=PKI-Trust-Manager/CN=*.local" \
+  -addext "subjectAltName=DNS:*.local${BASE_DOMAIN:+,DNS:$BASE_DOMAIN,DNS:*.$BASE_DOMAIN}" 2>/dev/null
+chmod 600 key.pem
+chmod 644 cert.crt
+info "Certificates created: cert.crt + key.pem (valid 365 days, self-signed)"
+info "Cert SANs: *.local${BASE_DOMAIN:+, $BASE_DOMAIN, *.$BASE_DOMAIN}"
+cd "$DEPLOY_DIR"
 
 # =============================================================================
 # 5. Write docker-compose.deploy.yml
@@ -311,10 +615,6 @@ services:
       - "${CAAPI_PORT:-5051}:5225"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - CASettings__CAType=EJBCA
-      - CASettings__EjbcaSoapUrlOrAwsCaArn=https://ejbca.local:8443/ejbca/ejbcaws/ejbcaws?wsdl
-      - CASettings__EjbcaCaNameOrAwsAccessKey=${EJBCA_CA_NAME:-ManagementCA}
-      - CASettings__EjbcaCertAuthPasswordOrAwsSecretKey=${EJBCA_CA_PASSWORD:-ejbca}
       - Logging__LogLevel__Default=${LOG_LEVEL:-Information}
       - Logging__LogLevel__Microsoft=${LOG_LEVEL_MS:-Warning}
     restart: always
@@ -335,7 +635,7 @@ services:
       - access-bridge
       - application-bridge
     ports:
-      - "${CERTAPI_PORT:-5052}:5227"
+      - "${CERTAPI_PORT:-5052}:60713"
       - "${CERTAPI_TLS_PORT:-7103}:7103"
     volumes:
       - ./license:/app/license:ro
@@ -343,8 +643,6 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__OurDBContext=Server=${SQL_HOST:-sqlserver.local},${SQL_PORT:-1433};Database=${SQL_DATABASE:-PKIDBEE};User Id=${SQL_USER:-sa};Password=${SQL_SA_PASSWORD:-PKI_Strong@Pass123};MultipleActiveResultSets=true;TrustServerCertificate=True;
       - APIProvider__BaseUrl=${CERTAPI_INTERNAL_URL:-http://localhost:60713}
-      - APIProvider__AppId=${CERTAPI_APP_ID:-084a72b6-11d7-4e82-af11-bae943fea0a5}
-      - APIProvider__AppKey=${CERTAPI_APP_KEY:-9d4e0346-2a4c-407b-bdf5-699bb68a5b61}
       - Acme__ReuseDomainValidation=${ACME_REUSE_VALIDATION:-false}
       - Acme__PendingOrderValidityMinutes=${ACME_ORDER_VALIDITY:-60}
       - Scep__OtpValidityMinutes=${SCEP_OTP_VALIDITY:-60}
@@ -365,8 +663,6 @@ services:
       - Logging__LogLevel__Default=${LOG_LEVEL:-Information}
       - Logging__LogLevel__Microsoft=${LOG_LEVEL_MS:-Warning}
     restart: always
-    extra_hosts:
-      - "certapi.cloud:${CLOUD_IP:-192.168.20.1}"
 
   # -------------------------------------------------------
   # Web UI - Certificate Management Portal
@@ -391,8 +687,6 @@ services:
       - Environment__Mode=${ENV_MODE:-Cloud}
       - Environment__TrustLevel=${TRUST_LEVEL:-Public}
       - APIProvider__BaseUrl=${CERTAPI_URL:-http://localhost:60713}
-      - APIProvider__AppId=${CMSWEB_APP_ID:-b74ad6d9-6418-407a-b36e-69613d35517a}
-      - APIProvider__AppKey=${CMSWEB_APP_KEY:-70803d70-3d0f-47fd-a206-cff4d0c15777}
       - Authentication__DefaultSuperAdminUsername=${ADMIN_USERNAME:-superadmin}
       - Authentication__DefaultSuperAdminPassword=${ADMIN_PASSWORD:-happy}
       - Authentication__DefaultSuperAdminEmail=${ADMIN_EMAIL:-root@local}
@@ -473,6 +767,7 @@ services:
       - "${NGINX_ACME_CLOUD_PORT:-8555}:8555"
       - "${NGINX_ACME_LOCAL_PORT:-8556}:8556"
       - "${NGINX_HTTPS_PORT:-443}:443"
+      - "${NGINX_HTTP_PORT:-80}:80"
     depends_on:
       - cmsweb
       - certapi
@@ -499,108 +794,7 @@ fi
 # =============================================================================
 step "6/8 — Writing Nginx configuration"
 
-cat > "$DEPLOY_DIR/nginx.minimal.conf" << 'NGINXEOF'
-events { worker_connections 1024; }
-
-http {
-    upstream local_certapi_apps {
-        server certapi.local:5227 max_fails=3 fail_timeout=30s;
-    }
-    upstream local_cmsweb_apps {
-        server cmsweb.local:5228 max_fails=3 fail_timeout=30s;
-    }
-
-    # EST Local
-    server {
-        listen 7031 ssl;
-        server_name est.local;
-        ssl_certificate /etc/nginx/cert.crt;
-        ssl_certificate_key /etc/nginx/key.pem;
-        ssl_verify_client optional_no_ca;
-        location / {
-            proxy_pass http://local_certapi_apps;
-            proxy_set_header Host $http_host;
-            proxy_set_header Authorization $http_authorization;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-            proxy_set_header X-Client-Cert $ssl_client_escaped_cert;
-        }
-    }
-
-    # SCEP HTTP
-    server {
-        listen 8895;
-        server_name scep.local;
-        location / {
-            proxy_pass http://local_certapi_apps;
-            proxy_set_header Host $http_host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        }
-    }
-
-    # SCEP HTTPS
-    server {
-        listen 8896 ssl;
-        server_name scep.local;
-        ssl_certificate /etc/nginx/cert.crt;
-        ssl_certificate_key /etc/nginx/key.pem;
-        location / {
-            proxy_pass http://local_certapi_apps;
-            proxy_set_header Host $http_host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        }
-    }
-
-    # ACME Local
-    server {
-        listen 8556 ssl;
-        server_name acme.local;
-        ssl_certificate /etc/nginx/cert.crt;
-        ssl_certificate_key /etc/nginx/key.pem;
-        location / {
-            proxy_pass http://local_certapi_apps;
-            proxy_set_header Host $http_host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        }
-    }
-
-    # CertAPI via Nginx (port 443, cmsapi.local)
-    server {
-        listen 443 ssl;
-        server_name cmsapi.local;
-        ssl_certificate /etc/nginx/cert.crt;
-        ssl_certificate_key /etc/nginx/key.pem;
-        location / {
-            proxy_pass http://local_certapi_apps;
-            proxy_set_header Host $http_host;
-            proxy_set_header Authorization $http_authorization;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        }
-    }
-
-    # Web UI via Nginx (port 443 default, cmsweb.local)
-    server {
-        listen 443 ssl default_server;
-        server_name cmsweb.local;
-        ssl_certificate /etc/nginx/cert.crt;
-        ssl_certificate_key /etc/nginx/key.pem;
-        location / {
-            proxy_pass http://local_cmsweb_apps;
-            proxy_set_header Host $http_host;
-            proxy_set_header Authorization $http_authorization;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        }
-    }
-}
-NGINXEOF
-
-info "nginx.minimal.conf written"
+write_nginx_conf
 
 # =============================================================================
 # 7. Pull all container images
@@ -702,6 +896,14 @@ echo ""
 IP_ADDR=$(hostname -I | awk '{print $1}')
 echo -e "${BOLD}Access Points${NC}"
 echo ""
+if [[ -n "$BASE_DOMAIN" ]]; then
+  echo -e "  ${CYAN}Web Admin (FQDN):${NC}    https://web.$BASE_DOMAIN/"
+  echo -e "  ${CYAN}CertAPI (FQDN):${NC}      https://certapi.$BASE_DOMAIN/"
+  echo -e "  ${CYAN}SCEP (FQDN):${NC}         http://scep.$BASE_DOMAIN:8895/scep"
+  echo -e "  ${CYAN}ACME (FQDN):${NC}         https://acme.$BASE_DOMAIN:8556/acme/directory"
+  echo -e "  ${CYAN}EST (FQDN):${NC}          https://est.$BASE_DOMAIN:7031/.well-known/est"
+  echo ""
+fi
 echo -e "  ${CYAN}Web Admin UI:${NC}       http://$IP_ADDR:5053/"
 echo -e "  ${CYAN}Web Admin (SSL):${NC}    https://$IP_ADDR/"
 echo -e "  ${CYAN}CertAPI Health:${NC}     http://$IP_ADDR:5052/health"
