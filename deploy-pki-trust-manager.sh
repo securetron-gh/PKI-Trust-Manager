@@ -212,9 +212,24 @@ NGINXEOF
     CERTAPI_FQDNS="certapi.$BASE_DOMAIN"
     WEB_FQDNS="web.$BASE_DOMAIN"
   fi
-  if [[ -n "$EXTRA_EST_FQDNS" ]]; then  EST_FQDNS="$EST_FQDNS $(echo "$EXTRA_EST_FQDNS" | tr ',' ' ')"; fi
-  if [[ -n "$EXTRA_SCEP_FQDNS" ]]; then SCEP_FQDNS="$SCEP_FQDNS $(echo "$EXTRA_SCEP_FQDNS" | tr ',' ' ')"; fi
-  if [[ -n "$EXTRA_ACME_FQDNS" ]]; then ACME_FQDNS="$ACME_FQDNS $(echo "$EXTRA_ACME_FQDNS" | tr ',' ' ')"; fi
+  # Expand extra hostnames: bare names get the base domain appended
+  # (acme-web -> acme-web.<BASE_DOMAIN>); fully-qualified names stay as-is.
+  expand_extras() {
+    local out=""
+    local item
+    for item in $(echo "$1" | tr ',' ' '); do
+      [[ -z "$item" ]] && continue
+      if [[ "$item" == *"."* || -z "$2" ]]; then
+        out="$out $item"
+      else
+        out="$out $item.$2"
+      fi
+    done
+    echo "$out"
+  }
+  if [[ -n "$EXTRA_EST_FQDNS" ]]; then  EST_FQDNS="$EST_FQDNS$(expand_extras "$EXTRA_EST_FQDNS" "$BASE_DOMAIN")"; fi
+  if [[ -n "$EXTRA_SCEP_FQDNS" ]]; then SCEP_FQDNS="$SCEP_FQDNS$(expand_extras "$EXTRA_SCEP_FQDNS" "$BASE_DOMAIN")"; fi
+  if [[ -n "$EXTRA_ACME_FQDNS" ]]; then ACME_FQDNS="$ACME_FQDNS$(expand_extras "$EXTRA_ACME_FQDNS" "$BASE_DOMAIN")"; fi
 
   # Substitute FQDN placeholders
   if [[ -n "$EST_FQDNS" ]]; then  sed -i "s| __EST_FQDN__| $EST_FQDNS|g" "$DEPLOY_DIR/nginx.minimal.conf";  else sed -i "s| __EST_FQDN__||g" "$DEPLOY_DIR/nginx.minimal.conf"; fi
